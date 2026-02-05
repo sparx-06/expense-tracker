@@ -20,7 +20,7 @@ A self-hosted web application for tracking event-based expenses like birthdays, 
 ```yaml
 services:
   expense-tracker:
-    image: ghcr.io/yourusername/expense-tracker:latest
+    image: ghcr.io/sparx-06/expense-tracker:latest
     container_name: expense-tracker
     ports:
       - "5000:5000"
