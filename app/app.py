@@ -10,37 +10,139 @@ app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 db = SQLAlchemy(app)
 
 # Models
-class Category(db.Model):
+class EventType(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String(100), nullable=False, unique=True)
-    expenses = db.relationship('Expense', backref='category', lazy=True, cascade='all, delete-orphan')
+    events = db.relationship('Event', backref='event_type', lazy=True)
+
+class ExpenseCategory(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(100), nullable=False, unique=True)
+    expenses = db.relationship('Expense', backref='category', lazy=True)
+
+class Event(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(200), nullable=False)
+    event_type_id = db.Column(db.Integer, db.ForeignKey('event_type.id'), nullable=False)
+    date = db.Column(db.Date, nullable=False)
+    notes = db.Column(db.Text)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    expenses = db.relationship('Expense', backref='event', lazy=True, cascade='all, delete-orphan')
 
 class Expense(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     description = db.Column(db.String(200), nullable=False)
     amount = db.Column(db.Float, nullable=False)
     date = db.Column(db.Date, nullable=False)
-    category_id = db.Column(db.Integer, db.ForeignKey('category.id'), nullable=False)
+    event_id = db.Column(db.Integer, db.ForeignKey('event.id'), nullable=False)
+    category_id = db.Column(db.Integer, db.ForeignKey('expense_category.id'), nullable=False)
     notes = db.Column(db.Text)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
 
 # Initialize database
 with app.app_context():
     db.create_all()
-    # Add default categories if none exist
-    if Category.query.count() == 0:
-        default_categories = ['Birthday', 'Anniversary', 'Christmas', 'Trip', 'Other Holiday']
+    
+    # Add default event types if none exist
+    if EventType.query.count() == 0:
+        default_event_types = ['Birthday', 'Anniversary', 'Trip', 'Christmas', 'Wedding', 
+                               'Thanksgiving', 'Easter', 'Graduation', 'Baby Shower', 'Other']
+        for type_name in default_event_types:
+            event_type = EventType(name=type_name)
+            db.session.add(event_type)
+        db.session.commit()
+    
+    # Add default expense categories if none exist
+    if ExpenseCategory.query.count() == 0:
+        default_categories = [
+            'Gifts', 'Food & Dining', 'Transportation', 'Accommodation', 'Entertainment',
+            'Decorations', 'Supplies', 'Clothing', 'Activities', 'Services', 'Other'
+        ]
         for cat_name in default_categories:
-            category = Category(name=cat_name)
+            category = ExpenseCategory(name=cat_name)
             db.session.add(category)
         db.session.commit()
 
 @app.route('/')
 def index():
-    categories = Category.query.all()
-    expenses = Expense.query.order_by(Expense.date.desc()).all()
-    return render_template('index.html', categories=categories, expenses=expenses)
+    event_types = EventType.query.all()
+    expense_categories = ExpenseCategory.query.all()
+    events = Event.query.order_by(Event.date.desc()).all()
+    return render_template('index.html', 
+                         event_types=event_types, 
+                         expense_categories=expense_categories,
+                         events=events)
 
+# Event endpoints
+@app.route('/api/events', methods=['GET', 'POST'])
+def handle_events():
+    if request.method == 'POST':
+        data = request.json
+        try:
+            event = Event(
+                name=data['name'],
+                event_type_id=int(data['event_type_id']),
+                date=datetime.strptime(data['date'], '%Y-%m-%d').date(),
+                notes=data.get('notes', '')
+            )
+            db.session.add(event)
+            db.session.commit()
+            return jsonify({'success': True, 'id': event.id})
+        except Exception as e:
+            return jsonify({'success': False, 'error': str(e)}), 400
+    
+    # GET request
+    events = Event.query.order_by(Event.date.desc()).all()
+    return jsonify([{
+        'id': e.id,
+        'name': e.name,
+        'event_type': e.event_type.name,
+        'event_type_id': e.event_type_id,
+        'date': e.date.strftime('%Y-%m-%d'),
+        'notes': e.notes,
+        'total_expenses': sum(exp.amount for exp in e.expenses)
+    } for e in events])
+
+@app.route('/api/events/<int:event_id>', methods=['GET', 'DELETE', 'PUT'])
+def handle_event(event_id):
+    event = Event.query.get_or_404(event_id)
+    
+    if request.method == 'GET':
+        return jsonify({
+            'id': event.id,
+            'name': event.name,
+            'event_type_id': event.event_type_id,
+            'date': event.date.strftime('%Y-%m-%d'),
+            'notes': event.notes,
+            'expenses': [{
+                'id': exp.id,
+                'description': exp.description,
+                'amount': exp.amount,
+                'date': exp.date.strftime('%Y-%m-%d'),
+                'category': exp.category.name,
+                'category_id': exp.category_id,
+                'notes': exp.notes
+            } for exp in event.expenses]
+        })
+    
+    if request.method == 'DELETE':
+        db.session.delete(event)
+        db.session.commit()
+        return jsonify({'success': True})
+    
+    if request.method == 'PUT':
+        data = request.json
+        try:
+            event.name = data['name']
+            event.event_type_id = int(data['event_type_id'])
+            event.date = datetime.strptime(data['date'], '%Y-%m-%d').date()
+            event.notes = data.get('notes', '')
+            db.session.commit()
+            return jsonify({'success': True})
+        except Exception as e:
+            return jsonify({'success': False, 'error': str(e)}), 400
+
+# Expense endpoints
 @app.route('/api/expenses', methods=['GET', 'POST'])
 def handle_expenses():
     if request.method == 'POST':
@@ -50,6 +152,7 @@ def handle_expenses():
                 description=data['description'],
                 amount=float(data['amount']),
                 date=datetime.strptime(data['date'], '%Y-%m-%d').date(),
+                event_id=int(data['event_id']),
                 category_id=int(data['category_id']),
                 notes=data.get('notes', '')
             )
@@ -66,6 +169,8 @@ def handle_expenses():
         'description': e.description,
         'amount': e.amount,
         'date': e.date.strftime('%Y-%m-%d'),
+        'event': e.event.name,
+        'event_id': e.event_id,
         'category': e.category.name,
         'category_id': e.category_id,
         'notes': e.notes
@@ -86,6 +191,7 @@ def handle_expense(expense_id):
             expense.description = data['description']
             expense.amount = float(data['amount'])
             expense.date = datetime.strptime(data['date'], '%Y-%m-%d').date()
+            expense.event_id = int(data['event_id'])
             expense.category_id = int(data['category_id'])
             expense.notes = data.get('notes', '')
             db.session.commit()
@@ -93,80 +199,101 @@ def handle_expense(expense_id):
         except Exception as e:
             return jsonify({'success': False, 'error': str(e)}), 400
 
-@app.route('/api/categories', methods=['GET', 'POST'])
-def handle_categories():
+# Event Type endpoints
+@app.route('/api/event-types', methods=['GET', 'POST'])
+def handle_event_types():
     if request.method == 'POST':
         data = request.json
         try:
-            category = Category(name=data['name'])
+            event_type = EventType(name=data['name'])
+            db.session.add(event_type)
+            db.session.commit()
+            return jsonify({'success': True, 'id': event_type.id})
+        except Exception as e:
+            return jsonify({'success': False, 'error': str(e)}), 400
+    
+    event_types = EventType.query.all()
+    return jsonify([{'id': et.id, 'name': et.name} for et in event_types])
+
+# Expense Category endpoints
+@app.route('/api/expense-categories', methods=['GET', 'POST'])
+def handle_expense_categories():
+    if request.method == 'POST':
+        data = request.json
+        try:
+            category = ExpenseCategory(name=data['name'])
             db.session.add(category)
             db.session.commit()
             return jsonify({'success': True, 'id': category.id})
         except Exception as e:
             return jsonify({'success': False, 'error': str(e)}), 400
     
-    categories = Category.query.all()
+    categories = ExpenseCategory.query.all()
     return jsonify([{'id': c.id, 'name': c.name} for c in categories])
-
-@app.route('/api/categories/<int:category_id>', methods=['DELETE'])
-def delete_category(category_id):
-    category = Category.query.get_or_404(category_id)
-    try:
-        db.session.delete(category)
-        db.session.commit()
-        return jsonify({'success': True})
-    except Exception as e:
-        return jsonify({'success': False, 'error': str(e)}), 400
 
 @app.route('/api/analytics')
 def analytics():
-    category_id = request.args.get('category_id', type=int)
+    event_type_id = request.args.get('event_type_id', type=int)
     
-    # Get yearly totals by category
+    # Get yearly totals by event type
     query = db.session.query(
-        extract('year', Expense.date).label('year'),
-        Category.name,
+        extract('year', Event.date).label('year'),
+        EventType.name,
         func.sum(Expense.amount).label('total')
-    ).join(Category).group_by('year', Category.name).order_by('year', Category.name)
+    ).join(Event).join(Expense).group_by('year', EventType.name).order_by('year', EventType.name)
     
-    if category_id:
-        query = query.filter(Expense.category_id == category_id)
+    if event_type_id:
+        query = query.filter(Event.event_type_id == event_type_id)
     
     results = query.all()
     
     # Format data
-    data = {}
-    for year, category, total in results:
+    yearly_data = {}
+    for year, event_type, total in results:
         year = int(year)
-        if year not in data:
-            data[year] = {}
-        data[year][category] = float(total)
+        if year not in yearly_data:
+            yearly_data[year] = {}
+        yearly_data[year][event_type] = float(total)
     
-    # Get monthly breakdown for current year
-    current_year = datetime.now().year
-    monthly_query = db.session.query(
-        extract('month', Expense.date).label('month'),
-        Category.name,
+    # Get event breakdown
+    event_query = db.session.query(
+        Event.id,
+        Event.name,
+        Event.date,
+        EventType.name.label('event_type'),
         func.sum(Expense.amount).label('total')
-    ).join(Category).filter(
-        extract('year', Expense.date) == current_year
-    ).group_by('month', Category.name).order_by('month')
+    ).join(EventType).join(Expense).group_by(Event.id).order_by(Event.date.desc())
     
-    if category_id:
-        monthly_query = monthly_query.filter(Expense.category_id == category_id)
+    if event_type_id:
+        event_query = event_query.filter(Event.event_type_id == event_type_id)
     
-    monthly_results = monthly_query.all()
+    event_results = event_query.all()
     
-    monthly_data = {}
-    for month, category, total in monthly_results:
-        month = int(month)
-        if month not in monthly_data:
-            monthly_data[month] = {}
-        monthly_data[month][category] = float(total)
+    events_data = [{
+        'id': e.id,
+        'name': e.name,
+        'date': e.date.strftime('%Y-%m-%d'),
+        'event_type': e.event_type,
+        'total': float(e.total)
+    } for e in event_results]
+    
+    # Get category breakdown
+    category_query = db.session.query(
+        ExpenseCategory.name,
+        func.sum(Expense.amount).label('total')
+    ).join(Expense).group_by(ExpenseCategory.name).order_by(func.sum(Expense.amount).desc())
+    
+    if event_type_id:
+        category_query = category_query.join(Event).filter(Event.event_type_id == event_type_id)
+    
+    category_results = category_query.all()
+    
+    category_data = {cat: float(total) for cat, total in category_results}
     
     return jsonify({
-        'yearly': data,
-        'monthly': monthly_data
+        'yearly': yearly_data,
+        'events': events_data,
+        'categories': category_data
     })
 
 if __name__ == '__main__':
