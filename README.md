@@ -101,4 +101,4 @@ docker build -t expense-tracker .
 
 ## License
 
-This project is provided as-is for personal use.
+This project was created with the help of AI and is provided as-is for personal use.
