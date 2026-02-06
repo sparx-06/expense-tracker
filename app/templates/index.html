@@ -844,9 +844,10 @@
         }
 
         function getEventTypeName(eventTypeId) {
-            const eventTypes = {{ event_types | tojson }};
-            const eventType = eventTypes.find(et => et.id === eventTypeId);
-            return eventType ? eventType.name : 'Unknown';
+            // Fetch from the select options in the DOM
+            const select = document.getElementById('event-type');
+            const option = select.querySelector(`option[value="${eventTypeId}"]`);
+            return option ? option.textContent : 'Unknown';
         }
 
         async function deleteEvent(eventId) {
