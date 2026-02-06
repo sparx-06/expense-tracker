@@ -61,11 +61,11 @@
             font-weight: 600;
         }
 
-        .tab-content {
+        .view {
             display: none;
         }
 
-        .tab-content.active {
+        .view.active {
             display: block;
         }
 
@@ -151,6 +151,19 @@
             font-size: 12px;
         }
 
+        .btn-link {
+            background: none;
+            color: #667eea;
+            padding: 0;
+            text-decoration: none;
+            font-weight: 600;
+        }
+
+        .btn-link:hover {
+            background: none;
+            text-decoration: underline;
+        }
+
         table {
             width: 100%;
             border-collapse: collapse;
@@ -230,6 +243,7 @@
             padding: 20px;
             margin-bottom: 15px;
             transition: all 0.3s;
+            cursor: pointer;
         }
 
         .event-card:hover {
@@ -262,19 +276,6 @@
             font-size: 24px;
             font-weight: 700;
             color: #667eea;
-        }
-
-        .expense-list {
-            margin-top: 15px;
-            padding-top: 15px;
-            border-top: 1px solid #e0e0e0;
-        }
-
-        .expense-item {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            padding: 8px 0;
         }
 
         .chart-container {
@@ -368,6 +369,32 @@
             color: #333;
         }
 
+        .back-button {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            margin-bottom: 20px;
+            color: #667eea;
+            text-decoration: none;
+            font-weight: 600;
+        }
+
+        .back-button:hover {
+            text-decoration: underline;
+        }
+
+        .event-detail-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            margin-bottom: 30px;
+        }
+
+        .event-detail-info h2 {
+            font-size: 28px;
+            margin-bottom: 10px;
+        }
+
         @media (max-width: 768px) {
             .form-grid {
                 grid-template-columns: 1fr;
@@ -389,6 +416,11 @@
             .bar-amount {
                 text-align: left;
             }
+
+            .event-header {
+                flex-direction: column;
+                align-items: flex-start;
+            }
         }
     </style>
 </head>
@@ -401,132 +433,161 @@
     </header>
 
     <div class="container">
-        <div class="tabs">
-            <button class="tab active" onclick="switchTab('events')">Events</button>
-            <button class="tab" onclick="switchTab('analytics')">Analytics</button>
-            <button class="tab" onclick="switchTab('settings')">Settings</button>
-        </div>
+        <!-- Events List View -->
+        <div id="events-list-view" class="view active">
+            <div class="tabs">
+                <button class="tab active" onclick="showEventsTab()">Events</button>
+                <button class="tab" onclick="showAnalyticsTab()">Analytics</button>
+                <button class="tab" onclick="showSettingsTab()">Settings</button>
+            </div>
 
-        <!-- Events Tab -->
-        <div id="events-tab" class="tab-content active">
-            <div class="card">
-                <h2 style="margin-bottom: 20px;">Create New Event</h2>
-                <form id="event-form" onsubmit="addEvent(event)">
-                    <div class="form-grid">
-                        <div class="form-group">
-                            <label>Event Name *</label>
-                            <input type="text" id="event-name" required placeholder="e.g., Mom's 60th Birthday">
+            <div id="events-tab-content">
+                <div class="card">
+                    <h2 style="margin-bottom: 20px;">Create New Event</h2>
+                    <form id="event-form" onsubmit="addEvent(event)">
+                        <div class="form-grid">
+                            <div class="form-group">
+                                <label>Event Name *</label>
+                                <input type="text" id="event-name" required placeholder="e.g., Mom's 60th Birthday">
+                            </div>
+                            <div class="form-group">
+                                <label>Event Type *</label>
+                                <select id="event-type" required>
+                                    {% for event_type in event_types %}
+                                    <option value="{{ event_type.id }}">{{ event_type.name }}</option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label>Date *</label>
+                                <input type="date" id="event-date" required>
+                            </div>
                         </div>
                         <div class="form-group">
-                            <label>Event Type *</label>
-                            <select id="event-type" required>
+                            <label>Notes (optional)</label>
+                            <textarea id="event-notes" placeholder="Additional details about this event..."></textarea>
+                        </div>
+                        <button type="submit" style="margin-top: 15px;">Create Event</button>
+                    </form>
+                </div>
+
+                <div class="card">
+                    <h2 style="margin-bottom: 20px;">Your Events</h2>
+                    <div id="events-list"></div>
+                </div>
+            </div>
+
+            <!-- Analytics Tab Content -->
+            <div id="analytics-tab-content" style="display: none;">
+                <div class="card">
+                    <h2 style="margin-bottom: 20px;">Expense Analytics</h2>
+                    
+                    <div class="filter-section">
+                        <div class="form-group">
+                            <label>Filter by Event Type</label>
+                            <select id="analytics-event-type" onchange="loadAnalytics()">
+                                <option value="">All Event Types</option>
                                 {% for event_type in event_types %}
                                 <option value="{{ event_type.id }}">{{ event_type.name }}</option>
                                 {% endfor %}
                             </select>
                         </div>
-                        <div class="form-group">
-                            <label>Date *</label>
-                            <input type="date" id="event-date" required>
+                    </div>
+
+                    <div class="analytics-grid" id="stats-grid"></div>
+
+                    <div class="chart-container">
+                        <h3>Spending by Event Type (Yearly)</h3>
+                        <div id="yearly-chart" class="bar-chart"></div>
+                    </div>
+
+                    <div class="chart-container">
+                        <h3>Individual Events</h3>
+                        <div id="events-chart" class="bar-chart"></div>
+                    </div>
+
+                    <div class="chart-container">
+                        <h3>Spending by Category</h3>
+                        <div id="category-chart" class="bar-chart"></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Settings Tab Content -->
+            <div id="settings-tab-content" style="display: none;">
+                <div class="card">
+                    <h2 style="margin-bottom: 20px;">Event Types</h2>
+                    <form id="event-type-form" onsubmit="addEventType(event)">
+                        <div style="display: flex; gap: 15px; align-items: flex-end;">
+                            <div class="form-group" style="flex: 1;">
+                                <label>Event Type Name</label>
+                                <input type="text" id="new-event-type" required placeholder="e.g., Baby Shower">
+                            </div>
+                            <button type="submit">Add Event Type</button>
                         </div>
-                    </div>
-                    <div class="form-group">
-                        <label>Notes (optional)</label>
-                        <textarea id="event-notes" placeholder="Additional details about this event..."></textarea>
-                    </div>
-                    <button type="submit" style="margin-top: 15px;">Create Event</button>
-                </form>
-            </div>
+                    </form>
+                </div>
 
-            <div class="card">
-                <h2 style="margin-bottom: 20px;">Your Events</h2>
-                <div id="events-list"></div>
-            </div>
-        </div>
+                <div class="card">
+                    <h2 style="margin-bottom: 20px;">Expense Categories</h2>
+                    <form id="category-form" onsubmit="addExpenseCategory(event)">
+                        <div style="display: flex; gap: 15px; align-items: flex-end;">
+                            <div class="form-group" style="flex: 1;">
+                                <label>Category Name</label>
+                                <input type="text" id="new-category" required placeholder="e.g., Photography">
+                            </div>
+                            <button type="submit">Add Category</button>
+                        </div>
+                    </form>
 
-        <!-- Analytics Tab -->
-        <div id="analytics-tab" class="tab-content">
-            <div class="card">
-                <h2 style="margin-bottom: 20px;">Expense Analytics</h2>
-                
-                <div class="filter-section">
-                    <div class="form-group">
-                        <label>Filter by Event Type</label>
-                        <select id="analytics-event-type" onchange="loadAnalytics()">
-                            <option value="">All Event Types</option>
-                            {% for event_type in event_types %}
-                            <option value="{{ event_type.id }}">{{ event_type.name }}</option>
+                    <div style="margin-top: 20px;">
+                        <h3 style="margin-bottom: 15px;">Current Categories</h3>
+                        <div style="display: flex; flex-wrap: wrap; gap: 10px;">
+                            {% for category in expense_categories %}
+                            <span class="badge badge-primary">{{ category.name }}</span>
                             {% endfor %}
-                        </select>
+                        </div>
                     </div>
-                </div>
-
-                <div class="analytics-grid" id="stats-grid"></div>
-
-                <div class="chart-container">
-                    <h3>Spending by Event Type (Yearly)</h3>
-                    <div id="yearly-chart" class="bar-chart"></div>
-                </div>
-
-                <div class="chart-container">
-                    <h3>Individual Events</h3>
-                    <div id="events-chart" class="bar-chart"></div>
-                </div>
-
-                <div class="chart-container">
-                    <h3>Spending by Category</h3>
-                    <div id="category-chart" class="bar-chart"></div>
                 </div>
             </div>
         </div>
 
-        <!-- Settings Tab -->
-        <div id="settings-tab" class="tab-content">
-            <div class="card">
-                <h2 style="margin-bottom: 20px;">Event Types</h2>
-                <form id="event-type-form" onsubmit="addEventType(event)">
-                    <div style="display: flex; gap: 15px; align-items: flex-end;">
-                        <div class="form-group" style="flex: 1;">
-                            <label>Event Type Name</label>
-                            <input type="text" id="new-event-type" required placeholder="e.g., Baby Shower">
-                        </div>
-                        <button type="submit">Add Event Type</button>
-                    </div>
-                </form>
-            </div>
+        <!-- Event Detail View -->
+        <div id="event-detail-view" class="view">
+            <a href="#" class="back-button" onclick="showEventsListView(); return false;">
+                ← Back to Events
+            </a>
 
             <div class="card">
-                <h2 style="margin-bottom: 20px;">Expense Categories</h2>
-                <form id="category-form" onsubmit="addExpenseCategory(event)">
-                    <div style="display: flex; gap: 15px; align-items: flex-end;">
-                        <div class="form-group" style="flex: 1;">
-                            <label>Category Name</label>
-                            <input type="text" id="new-category" required placeholder="e.g., Photography">
-                        </div>
-                        <button type="submit">Add Category</button>
+                <div class="event-detail-header">
+                    <div class="event-detail-info">
+                        <h2 id="detail-event-title"></h2>
+                        <div id="detail-event-meta"></div>
                     </div>
-                </form>
-
-                <div style="margin-top: 20px;">
-                    <h3 style="margin-bottom: 15px;">Current Categories</h3>
-                    <div style="display: flex; flex-wrap: wrap; gap: 10px;">
-                        {% for category in expense_categories %}
-                        <span class="badge badge-primary">{{ category.name }}</span>
-                        {% endfor %}
+                    <div class="action-buttons">
+                        <button class="btn-small" onclick="openExpenseModalForCurrentEvent()">Add Expense</button>
+                        <button class="btn-small btn-secondary" onclick="editCurrentEvent()">Edit Event</button>
+                        <button class="btn-small btn-danger" onclick="deleteCurrentEvent()">Delete Event</button>
                     </div>
                 </div>
+
+                <div id="detail-event-summary"></div>
+
+                <h3 style="margin-top: 30px; margin-bottom: 15px;">Expenses</h3>
+                <div id="detail-expenses-table"></div>
             </div>
         </div>
     </div>
 
-    <!-- Add Expense Modal -->
+    <!-- Add/Edit Expense Modal -->
     <div id="expense-modal" class="modal">
         <div class="modal-content">
             <div class="modal-header">
-                <h2>Add Expense</h2>
+                <h2 id="expense-modal-title">Add Expense</h2>
                 <span class="close" onclick="closeExpenseModal()">&times;</span>
             </div>
-            <form id="expense-form" onsubmit="addExpense(event)">
+            <form id="expense-form" onsubmit="saveExpense(event)">
+                <input type="hidden" id="expense-id">
                 <input type="hidden" id="expense-event-id">
                 <div class="form-grid">
                     <div class="form-group">
@@ -555,48 +616,108 @@
                     <textarea id="expense-notes" placeholder="Additional details..."></textarea>
                 </div>
                 <div style="margin-top: 20px; display: flex; gap: 10px;">
-                    <button type="submit">Add Expense</button>
+                    <button type="submit" id="expense-submit-btn">Add Expense</button>
                     <button type="button" class="btn-secondary" onclick="closeExpenseModal()">Cancel</button>
                 </div>
             </form>
         </div>
     </div>
 
-    <!-- Event Detail Modal -->
-    <div id="event-detail-modal" class="modal">
+    <!-- Edit Event Modal -->
+    <div id="edit-event-modal" class="modal">
         <div class="modal-content">
             <div class="modal-header">
-                <h2 id="event-detail-title">Event Details</h2>
-                <span class="close" onclick="closeEventDetailModal()">&times;</span>
+                <h2>Edit Event</h2>
+                <span class="close" onclick="closeEditEventModal()">&times;</span>
             </div>
-            <div id="event-detail-content"></div>
+            <form id="edit-event-form" onsubmit="updateEvent(event)">
+                <input type="hidden" id="edit-event-id">
+                <div class="form-grid">
+                    <div class="form-group">
+                        <label>Event Name *</label>
+                        <input type="text" id="edit-event-name" required placeholder="e.g., Mom's 60th Birthday">
+                    </div>
+                    <div class="form-group">
+                        <label>Event Type *</label>
+                        <select id="edit-event-type" required>
+                            {% for event_type in event_types %}
+                            <option value="{{ event_type.id }}">{{ event_type.name }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>Date *</label>
+                        <input type="date" id="edit-event-date" required>
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label>Notes (optional)</label>
+                    <textarea id="edit-event-notes" placeholder="Additional details about this event..."></textarea>
+                </div>
+                <div style="margin-top: 20px; display: flex; gap: 10px;">
+                    <button type="submit">Update Event</button>
+                    <button type="button" class="btn-secondary" onclick="closeEditEventModal()">Cancel</button>
+                </div>
+            </form>
         </div>
     </div>
 
     <script>
         let currentEventId = null;
+        let currentEventData = null;
 
         // Set today's date as default
         document.getElementById('event-date').valueAsDate = new Date();
 
-        function switchTab(tabName) {
-            document.querySelectorAll('.tab-content').forEach(tab => {
-                tab.classList.remove('active');
-            });
-            document.querySelectorAll('.tab').forEach(tab => {
-                tab.classList.remove('active');
-            });
-
-            document.getElementById(tabName + '-tab').classList.add('active');
-            event.target.classList.add('active');
-
-            if (tabName === 'events') {
-                loadEvents();
-            } else if (tabName === 'analytics') {
-                loadAnalytics();
-            }
+        // Tab Navigation
+        function showEventsTab() {
+            document.getElementById('events-tab-content').style.display = 'block';
+            document.getElementById('analytics-tab-content').style.display = 'none';
+            document.getElementById('settings-tab-content').style.display = 'none';
+            updateActiveTab(0);
+            loadEvents();
         }
 
+        function showAnalyticsTab() {
+            document.getElementById('events-tab-content').style.display = 'none';
+            document.getElementById('analytics-tab-content').style.display = 'block';
+            document.getElementById('settings-tab-content').style.display = 'none';
+            updateActiveTab(1);
+            loadAnalytics();
+        }
+
+        function showSettingsTab() {
+            document.getElementById('events-tab-content').style.display = 'none';
+            document.getElementById('analytics-tab-content').style.display = 'none';
+            document.getElementById('settings-tab-content').style.display = 'block';
+            updateActiveTab(2);
+        }
+
+        function updateActiveTab(index) {
+            document.querySelectorAll('.tab').forEach((tab, i) => {
+                if (i === index) {
+                    tab.classList.add('active');
+                } else {
+                    tab.classList.remove('active');
+                }
+            });
+        }
+
+        // View Navigation
+        function showEventsListView() {
+            document.getElementById('events-list-view').classList.add('active');
+            document.getElementById('event-detail-view').classList.remove('active');
+            loadEvents();
+        }
+
+        function showEventDetailView(eventId) {
+            currentEventId = eventId;
+            document.getElementById('events-list-view').classList.remove('active');
+            document.getElementById('event-detail-view').classList.add('active');
+            loadEventDetail(eventId);
+        }
+
+        // Event Management
         async function addEvent(e) {
             e.preventDefault();
 
@@ -634,9 +755,9 @@
             }
 
             container.innerHTML = events.map(event => `
-                <div class="event-card">
+                <div class="event-card" onclick="showEventDetailView(${event.id})">
                     <div class="event-header">
-                        <div>
+                        <div style="flex: 1;">
                             <div class="event-title">${event.name}</div>
                             <div class="event-meta">
                                 <span class="badge badge-primary">${event.event_type}</span>
@@ -645,70 +766,53 @@
                         </div>
                         <div class="event-total">$${event.total_expenses.toFixed(2)}</div>
                     </div>
-                    <div class="action-buttons">
+                    <div class="action-buttons" onclick="event.stopPropagation()">
                         <button class="btn-small" onclick="openExpenseModal(${event.id})">Add Expense</button>
-                        <button class="btn-small btn-secondary" onclick="viewEventDetail(${event.id})">View Details</button>
                         <button class="btn-small btn-danger" onclick="deleteEvent(${event.id})">Delete</button>
                     </div>
                 </div>
             `).join('');
         }
 
-        function openExpenseModal(eventId) {
-            currentEventId = eventId;
-            document.getElementById('expense-event-id').value = eventId;
-            document.getElementById('expense-date').valueAsDate = new Date();
-            document.getElementById('expense-modal').style.display = 'block';
-        }
-
-        function closeExpenseModal() {
-            document.getElementById('expense-modal').style.display = 'none';
-            document.getElementById('expense-form').reset();
-        }
-
-        async function addExpense(e) {
-            e.preventDefault();
-
-            const data = {
-                description: document.getElementById('expense-description').value,
-                amount: document.getElementById('expense-amount').value,
-                category_id: document.getElementById('expense-category').value,
-                date: document.getElementById('expense-date').value,
-                event_id: document.getElementById('expense-event-id').value,
-                notes: document.getElementById('expense-notes').value
-            };
-
-            const response = await fetch('/api/expenses', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(data)
-            });
-
-            if (response.ok) {
-                closeExpenseModal();
-                loadEvents();
-            } else {
-                alert('Error adding expense');
-            }
-        }
-
-        async function viewEventDetail(eventId) {
+        async function loadEventDetail(eventId) {
             const response = await fetch(`/api/events/${eventId}`);
             const event = await response.json();
+            currentEventData = event;
 
             const totalExpenses = event.expenses.reduce((sum, exp) => sum + exp.amount, 0);
 
-            const content = `
-                <div style="margin-bottom: 20px;">
-                    <p><strong>Date:</strong> ${event.date}</p>
-                    <p><strong>Total Spent:</strong> $${totalExpenses.toFixed(2)}</p>
-                    ${event.notes ? `<p><strong>Notes:</strong> ${event.notes}</p>` : ''}
+            document.getElementById('detail-event-title').textContent = event.name;
+            document.getElementById('detail-event-meta').innerHTML = `
+                <div class="event-meta">
+                    <span class="badge badge-primary">${getEventTypeName(event.event_type_id)}</span>
+                    <span>📅 ${event.date}</span>
                 </div>
-                
-                <h3 style="margin-bottom: 15px;">Expenses</h3>
-                ${event.expenses.length === 0 ? 
-                    '<p style="text-align: center; color: #999; padding: 20px;">No expenses yet. Add your first expense!</p>' :
-                    `<table>
+            `;
+
+            document.getElementById('detail-event-summary').innerHTML = `
+                <div style="background: #f8f9fa; padding: 20px; border-radius: 8px; margin-bottom: 20px;">
+                    <div style="display: flex; justify-content: space-between; align-items: center;">
+                        <div>
+                            <div style="font-size: 14px; color: #666;">Total Spent</div>
+                            <div style="font-size: 32px; font-weight: 700; color: #667eea;">$${totalExpenses.toFixed(2)}</div>
+                        </div>
+                        <div>
+                            <div style="font-size: 14px; color: #666;">Number of Expenses</div>
+                            <div style="font-size: 32px; font-weight: 700; color: #667eea;">${event.expenses.length}</div>
+                        </div>
+                    </div>
+                    ${event.notes ? `<div style="margin-top: 15px; padding-top: 15px; border-top: 1px solid #e0e0e0;">
+                        <strong>Notes:</strong> ${event.notes}
+                    </div>` : ''}
+                </div>
+            `;
+
+            if (event.expenses.length === 0) {
+                document.getElementById('detail-expenses-table').innerHTML = 
+                    '<p style="text-align: center; color: #999; padding: 40px;">No expenses yet. Add your first expense!</p>';
+            } else {
+                document.getElementById('detail-expenses-table').innerHTML = `
+                    <table>
                         <thead>
                             <tr>
                                 <th>Date</th>
@@ -722,30 +826,27 @@
                             ${event.expenses.map(exp => `
                                 <tr>
                                     <td>${exp.date}</td>
-                                    <td>${exp.description}</td>
+                                    <td>${exp.description}${exp.notes ? `<br><small style="color: #999;">${exp.notes}</small>` : ''}</td>
                                     <td><span class="badge badge-success">${exp.category}</span></td>
                                     <td class="amount">$${exp.amount.toFixed(2)}</td>
                                     <td>
-                                        <button class="btn-small btn-danger" onclick="deleteExpense(${exp.id}, ${eventId})">Delete</button>
+                                        <div class="action-buttons">
+                                            <button class="btn-small btn-secondary" onclick="editExpense(${exp.id})">Edit</button>
+                                            <button class="btn-small btn-danger" onclick="deleteExpense(${exp.id})">Delete</button>
+                                        </div>
                                     </td>
                                 </tr>
                             `).join('')}
                         </tbody>
-                    </table>`
-                }
-                
-                <div style="margin-top: 20px;">
-                    <button onclick="openExpenseModal(${eventId}); closeEventDetailModal();">Add Expense</button>
-                </div>
-            `;
-
-            document.getElementById('event-detail-title').textContent = event.name;
-            document.getElementById('event-detail-content').innerHTML = content;
-            document.getElementById('event-detail-modal').style.display = 'block';
+                    </table>
+                `;
+            }
         }
 
-        function closeEventDetailModal() {
-            document.getElementById('event-detail-modal').style.display = 'none';
+        function getEventTypeName(eventTypeId) {
+            const eventTypes = {{ event_types | tojson }};
+            const eventType = eventTypes.find(et => et.id === eventTypeId);
+            return eventType ? eventType.name : 'Unknown';
         }
 
         async function deleteEvent(eventId) {
@@ -757,16 +858,153 @@
             }
         }
 
-        async function deleteExpense(expenseId, eventId) {
+        function deleteCurrentEvent() {
+            deleteEvent(currentEventId).then(() => {
+                showEventsListView();
+            });
+        }
+
+        function editCurrentEvent() {
+            editEvent(currentEventId);
+        }
+
+        async function editEvent(eventId) {
+            const response = await fetch(`/api/events/${eventId}`);
+            const event = await response.json();
+
+            document.getElementById('edit-event-id').value = event.id;
+            document.getElementById('edit-event-name').value = event.name;
+            document.getElementById('edit-event-type').value = event.event_type_id;
+            document.getElementById('edit-event-date').value = event.date;
+            document.getElementById('edit-event-notes').value = event.notes || '';
+            
+            document.getElementById('edit-event-modal').style.display = 'block';
+        }
+
+        function closeEditEventModal() {
+            document.getElementById('edit-event-modal').style.display = 'none';
+            document.getElementById('edit-event-form').reset();
+        }
+
+        async function updateEvent(e) {
+            e.preventDefault();
+
+            const eventId = document.getElementById('edit-event-id').value;
+            const data = {
+                name: document.getElementById('edit-event-name').value,
+                event_type_id: document.getElementById('edit-event-type').value,
+                date: document.getElementById('edit-event-date').value,
+                notes: document.getElementById('edit-event-notes').value
+            };
+
+            const response = await fetch(`/api/events/${eventId}`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(data)
+            });
+
+            if (response.ok) {
+                closeEditEventModal();
+                if (currentEventId) {
+                    loadEventDetail(currentEventId);
+                } else {
+                    loadEvents();
+                }
+            } else {
+                alert('Error updating event');
+            }
+        }
+
+        // Expense Management
+        function openExpenseModal(eventId) {
+            currentEventId = eventId;
+            document.getElementById('expense-id').value = '';
+            document.getElementById('expense-event-id').value = eventId;
+            document.getElementById('expense-modal-title').textContent = 'Add Expense';
+            document.getElementById('expense-submit-btn').textContent = 'Add Expense';
+            document.getElementById('expense-date').valueAsDate = new Date();
+            document.getElementById('expense-form').reset();
+            document.getElementById('expense-event-id').value = eventId;
+            document.getElementById('expense-modal').style.display = 'block';
+        }
+
+        function openExpenseModalForCurrentEvent() {
+            openExpenseModal(currentEventId);
+        }
+
+        function closeExpenseModal() {
+            document.getElementById('expense-modal').style.display = 'none';
+            document.getElementById('expense-form').reset();
+        }
+
+        async function saveExpense(e) {
+            e.preventDefault();
+
+            const expenseId = document.getElementById('expense-id').value;
+            const data = {
+                description: document.getElementById('expense-description').value,
+                amount: document.getElementById('expense-amount').value,
+                category_id: document.getElementById('expense-category').value,
+                date: document.getElementById('expense-date').value,
+                event_id: document.getElementById('expense-event-id').value,
+                notes: document.getElementById('expense-notes').value
+            };
+
+            const url = expenseId ? `/api/expenses/${expenseId}` : '/api/expenses';
+            const method = expenseId ? 'PUT' : 'POST';
+
+            const response = await fetch(url, {
+                method: method,
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(data)
+            });
+
+            if (response.ok) {
+                closeExpenseModal();
+                if (currentEventId && document.getElementById('event-detail-view').classList.contains('active')) {
+                    loadEventDetail(currentEventId);
+                } else {
+                    loadEvents();
+                }
+            } else {
+                alert('Error saving expense');
+            }
+        }
+
+        async function editExpense(expenseId) {
+            const response = await fetch(`/api/expenses`);
+            const expenses = await response.json();
+            const expense = expenses.find(e => e.id === expenseId);
+
+            if (expense) {
+                document.getElementById('expense-id').value = expense.id;
+                document.getElementById('expense-event-id').value = expense.event_id;
+                document.getElementById('expense-description').value = expense.description;
+                document.getElementById('expense-amount').value = expense.amount;
+                document.getElementById('expense-category').value = expense.category_id;
+                document.getElementById('expense-date').value = expense.date;
+                document.getElementById('expense-notes').value = expense.notes || '';
+                document.getElementById('expense-modal-title').textContent = 'Edit Expense';
+                document.getElementById('expense-submit-btn').textContent = 'Update Expense';
+                
+                document.getElementById('expense-modal').style.display = 'block';
+            }
+        }
+
+        async function deleteExpense(expenseId) {
             if (!confirm('Delete this expense?')) return;
 
             const response = await fetch(`/api/expenses/${expenseId}`, { method: 'DELETE' });
             if (response.ok) {
-                viewEventDetail(eventId);
-                loadEvents();
+                if (currentEventId && document.getElementById('event-detail-view').classList.contains('active')) {
+                    loadEventDetail(currentEventId);
+                } else {
+                    loadEvents();
+                }
             }
         }
 
+        // Settings
         async function addEventType(e) {
             e.preventDefault();
 
@@ -801,6 +1039,7 @@
             }
         }
 
+        // Analytics
         async function loadAnalytics() {
             const eventTypeId = document.getElementById('analytics-event-type').value;
             const url = eventTypeId ? `/api/analytics?event_type_id=${eventTypeId}` : '/api/analytics';
@@ -840,15 +1079,18 @@
 
             // Yearly chart
             const years = Object.keys(data.yearly).sort().reverse();
-            const maxYearly = Math.max(...years.map(year => 
-                Object.values(data.yearly[year]).reduce((a, b) => a + b, 0)
-            ));
+            const yearlyChart = document.getElementById('yearly-chart');
+            
+            if (years.length === 0) {
+                yearlyChart.innerHTML = '<p style="text-align: center; color: #999; padding: 20px;">No data yet. Add some events and expenses to see analytics!</p>';
+            } else {
+                const maxYearly = Math.max(...years.map(year => 
+                    Object.values(data.yearly[year]).reduce((a, b) => a + b, 0)
+                ));
 
-            document.getElementById('yearly-chart').innerHTML = years.length === 0 ? 
-                '<p style="text-align: center; color: #999;">No data yet</p>' :
-                years.map(year => {
+                yearlyChart.innerHTML = years.map(year => {
                     const yearTotal = Object.values(data.yearly[year]).reduce((a, b) => a + b, 0);
-                    const percentage = (yearTotal / maxYearly) * 100;
+                    const percentage = maxYearly > 0 ? (yearTotal / maxYearly) * 100 : 0;
                     return `
                         <div class="bar-row">
                             <div class="bar-label">${year}</div>
@@ -857,13 +1099,16 @@
                         </div>
                     `;
                 }).join('');
+            }
 
             // Events chart
-            const maxEvent = Math.max(...data.events.map(e => e.total));
-            document.getElementById('events-chart').innerHTML = data.events.length === 0 ?
-                '<p style="text-align: center; color: #999;">No events yet</p>' :
-                data.events.slice(0, 10).map(event => {
-                    const percentage = (event.total / maxEvent) * 100;
+            const eventsChart = document.getElementById('events-chart');
+            if (data.events.length === 0) {
+                eventsChart.innerHTML = '<p style="text-align: center; color: #999; padding: 20px;">No events yet</p>';
+            } else {
+                const maxEvent = Math.max(...data.events.map(e => e.total));
+                eventsChart.innerHTML = data.events.slice(0, 10).map(event => {
+                    const percentage = maxEvent > 0 ? (event.total / maxEvent) * 100 : 0;
                     return `
                         <div class="bar-row">
                             <div class="bar-label">${event.name}</div>
@@ -872,14 +1117,18 @@
                         </div>
                     `;
                 }).join('');
+            }
 
             // Category chart
             const categories = Object.entries(data.categories).sort((a, b) => b[1] - a[1]);
-            const maxCategory = categories.length > 0 ? categories[0][1] : 0;
-            document.getElementById('category-chart').innerHTML = categories.length === 0 ?
-                '<p style="text-align: center; color: #999;">No categories yet</p>' :
-                categories.map(([category, total]) => {
-                    const percentage = (total / maxCategory) * 100;
+            const categoryChart = document.getElementById('category-chart');
+            
+            if (categories.length === 0) {
+                categoryChart.innerHTML = '<p style="text-align: center; color: #999; padding: 20px;">No categories yet</p>';
+            } else {
+                const maxCategory = categories[0][1];
+                categoryChart.innerHTML = categories.map(([category, total]) => {
+                    const percentage = maxCategory > 0 ? (total / maxCategory) * 100 : 0;
                     return `
                         <div class="bar-row">
                             <div class="bar-label">${category}</div>
@@ -888,6 +1137,7 @@
                         </div>
                     `;
                 }).join('');
+            }
         }
 
         // Close modals when clicking outside
